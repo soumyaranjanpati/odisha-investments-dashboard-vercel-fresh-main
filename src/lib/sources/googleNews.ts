@@ -103,9 +103,14 @@ export async function discoverViaGoogleNews(
   windowStr: string
 ): Promise<DiscoveredItem[]> {
   const out: DiscoveredItem[] = [];
-  const perStateCap = Math.max(12, Math.floor(maxRecords / Math.max(1, states.length)));
+  // Fixed: Use a reasonable per-state cap instead of dividing by state count
+  // This ensures we get good coverage for each state regardless of how many are selected
+  const perStateCap = Math.max(15, Math.min(25, Math.floor(maxRecords / 2)));
+  
+  console.log(`[GNews] Processing ${states.length} states with perStateCap=${perStateCap}`);
 
   for (const state of states) {
+    console.log(`[GNews] Processing state: ${state}`);
     const url = buildGNewsUrl(state, windowStr);
     try {
       const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/rss+xml,text/xml,*/*" } });
@@ -117,9 +122,7 @@ export async function discoverViaGoogleNews(
       const filtered = (GNEWS_STRICT ? items.filter((it) => likelyInvestmentTitle(it.title)) : items)
         .slice(0, perStateCap);
 
-      if (GNEWS_DIAG) {
-        console.log(`[gnews] state=${state} total=${items.length} kept=${filtered.length} url=${url}`);
-      }
+      console.log(`[GNews] State ${state}: total=${items.length} kept=${filtered.length} perStateCap=${perStateCap}`);
 
       for (const it of filtered) {
         const realUrl = unwrapGoogleNewsLink(it.link);
@@ -133,7 +136,7 @@ export async function discoverViaGoogleNews(
         });
       }
     } catch (e: any) {
-      if (GNEWS_DIAG) console.warn(`[gnews] fetch failed state=${state}`, e?.message || e);
+      console.error(`[GNews] fetch failed for state=${state}:`, e?.message || e);
     }
   }
 

@@ -47,7 +47,7 @@ export type ExtractedRow = {
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
-/** Build a strict, anti-hallucination prompt */
+/** Build a strict, anti-hallucination prompt with content verification */
 export function buildPromptForInvestments(items: InItem[]): string {
   const articles = items
     .map((it, i) => {
@@ -65,24 +65,32 @@ ${txt}`;
 You are an information extraction system for Indian investment news.
 Extract ONLY when facts are explicit in the article/title. If unsure, set the field to null.
 
-STRICT RULES:
+CRITICAL ANTI-HALLUCINATION RULES:
 - Company: MUST appear verbatim in the article/title as the primary investor.
-  Do NOT hallucinate Big Tech names (Microsoft, Google, Apple, etc.) unless literally present AND they are the investor.
-  Prefer names in the TITLE over body if multiple orgs are present. If multiple orgs invest, pick the main investor mentioned.
-- State: Keep as the article’s project location. If the investment is pan-India with no specific state, set state=null.
-- Amount: Return INR crores as a number.
-  • Convert lakh crore correctly (₹1.5 lakh crore → 150000 crore).
-  • If a range is given, return the clearest single value; else null.
-- Sector: Choose ONE from:
-  ["Electronics/EMS","Semiconductor","Renewable Energy","Automobile","Steel","Chemicals","Cement","Textiles","IT/Data Centre","Food Processing","Pharma","Logistics/Warehousing","Mining","Real Estate/Infra","Oil & Gas"].
-  • Use Automobile ONLY if the article clearly mentions vehicles/car/EV/two-wheeler/bus/truck/OEM.
-  • Use Electronics/EMS for phones/iPhone, EMS/assembly/PCB/module/display/connector/contract manufacturing.
-  • Use Semiconductor for chip/fab/wafer/ATMP/OSAT terms.
-- Project type: One of ["Greenfield","Brownfield","Expansion","MoU","Proposal","Announcement"].
-- Status: One of ["MoU","Announced","Approved","Construction","Operational"].
-- Dates: Return as YYYY-MM-DD if explicit; else null.
-- If the article is mainly policy/grants with no specific investable project, return null for unclear fields.
-- Output JSON ONLY (no commentary). Return an array with one object per article, preserving order.
+  Do NOT hallucinate company names unless literally present in the text.
+  Do NOT infer companies from context - they must be explicitly named.
+  If no specific company is mentioned, set company=null.
+- State: MUST be explicitly mentioned in the article text. 
+  Do NOT assume states based on the target state parameter.
+  If the article doesn't clearly state the project location, set state=null.
+- Amount: MUST be explicitly mentioned with numbers in the article.
+  Do NOT infer amounts from context or make up numbers.
+  If no specific amount is mentioned, set amount_in_inr_crore=null.
+- Sector: MUST be clearly indicated in the article text.
+  Do NOT infer sectors from company names or context.
+  If the sector is not explicitly mentioned, set sector=null.
+- VERIFICATION: Before extracting any field, verify it exists in the article text.
+  If you cannot find explicit evidence in the text, set the field to null.
+
+STRICT EXTRACTION RULES:
+- Company: Must appear verbatim in article/title as the primary investor
+- State: Must be explicitly mentioned as the project location
+- Amount: Must have explicit numbers (₹X crore, X lakh crore, etc.)
+- Sector: Must be clearly indicated in the text
+- Project type: One of ["Greenfield","Brownfield","Expansion","MoU","Proposal","Announcement"]
+- Status: One of ["MoU","Announced","Approved","Construction","Operational"]
+- Dates: Return as YYYY-MM-DD if explicit; else null
+- If the article is mainly policy/grants with no specific investable project, return null for unclear fields
 
 OUTPUT SHAPE:
 [
@@ -136,6 +144,61 @@ function asStatus(v: any): StatusType | null {
   return (STATUS_TYPES as readonly string[]).includes(s) ? (s as StatusType) : null;
 }
 
+/** Verify extracted data against article content */
+function verifyExtractedData(extracted: ExtractedRow, articleText: string, articleTitle: string): ExtractedRow {
+  const text = `${articleTitle} ${articleText}`.toLowerCase();
+  const verified = { ...extracted };
+
+  // Verify company exists in text
+  if (verified.company) {
+    const companyLower = verified.company.toLowerCase();
+    if (!text.includes(companyLower)) {
+      console.warn(`[VERIFY] Company "${verified.company}" not found in article text`);
+      verified.company = null;
+    }
+  }
+
+  // Verify state exists in text
+  if (verified.state) {
+    const stateLower = verified.state.toLowerCase();
+    if (!text.includes(stateLower)) {
+      console.warn(`[VERIFY] State "${verified.state}" not found in article text`);
+      verified.state = null;
+    }
+  }
+
+  // Verify sector exists in text
+  if (verified.sector) {
+    const sectorKeywords = {
+      "Steel": ["steel", "iron", "metal"],
+      "Automobile": ["automobile", "vehicle", "car", "ev", "electric vehicle"],
+      "Electronics/EMS": ["electronics", "ems", "assembly", "phone", "smartphone"],
+      "Semiconductor": ["semiconductor", "chip", "wafer", "fab"],
+      "Renewable Energy": ["renewable", "solar", "wind", "green energy"],
+      "Oil & Gas": ["oil", "gas", "petroleum", "refinery"],
+      "Cement": ["cement"],
+      "Textiles": ["textile", "fabric", "garment"],
+      "IT/Data Centre": ["it", "data centre", "data center", "software"],
+      "Food Processing": ["food", "processing", "agriculture"],
+      "Pharma": ["pharma", "pharmaceutical", "medicine"],
+      "Logistics/Warehousing": ["logistics", "warehouse", "storage"],
+      "Mining": ["mining", "coal", "mineral"],
+      "Real Estate/Infra": ["real estate", "infrastructure", "construction"],
+      "Chemicals": ["chemical", "petrochemical"]
+    };
+    
+    const keywords = sectorKeywords[verified.sector as keyof typeof sectorKeywords] || [];
+    const hasSectorKeywords = keywords.some(keyword => text.includes(keyword));
+    
+    if (!hasSectorKeywords) {
+      console.warn(`[VERIFY] Sector "${verified.sector}" not supported by keywords in article text`);
+      verified.sector = null;
+    }
+  }
+
+  return verified;
+}
+
 /** Call OpenAI and parse into structured array */
 export async function extractStructured(items: InItem[]): Promise<ExtractedRow[]> {
   if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
@@ -173,7 +236,7 @@ export async function extractStructured(items: InItem[]): Promise<ExtractedRow[]
   try {
     const parsed = JSON.parse(jsonStr) as any[];
     if (Array.isArray(parsed)) {
-      return parsed.map((o: any): ExtractedRow => ({
+      const extracted = parsed.map((o: any): ExtractedRow => ({
         company: orNullString(o.company),
         sector: orNullString(o.sector),
         amount_in_inr_crore: orNullNumber(o.amount_in_inr_crore),
@@ -186,6 +249,17 @@ export async function extractStructured(items: InItem[]): Promise<ExtractedRow[]
         source_url: String(o.source_url || ""),
         source_name: orNullString(o.source_name),
       }));
+
+      // Verify each extracted record against its source article
+      const verified = extracted.map((record, index) => {
+        const sourceItem = items[index];
+        if (sourceItem) {
+          return verifyExtractedData(record, sourceItem.text || "", sourceItem.title || "");
+        }
+        return record;
+      });
+
+      return verified;
     }
   } catch {
     // ignore parse errors and fall back to []

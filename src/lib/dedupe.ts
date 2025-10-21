@@ -4,14 +4,26 @@ import type { Investment } from "@/lib/types";
 /**
  * Normalize a URL for stable comparisons (strip protocol, www, trailing slash, anchors).
  */
+// export function normalizeUrl(u: string): string {
+//   try {
+//     const url = new URL(u);
+//     const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+//     const path = url.pathname.replace(/\/+$/, "");
+//     const qs = url.searchParams.toString(); // keep query to distinguish article pages if needed
+//     const core = `${host}${path}${qs ? "?" + qs : ""}`;
+//     return core.toLowerCase();
+//   } catch {
+//     return (u || "").trim().toLowerCase();
+//   }
+// }
 export function normalizeUrl(u: string): string {
   try {
     const url = new URL(u);
     const host = url.hostname.replace(/^www\./i, "").toLowerCase();
     const path = url.pathname.replace(/\/+$/, "");
-    const qs = url.searchParams.toString(); // keep query to distinguish article pages if needed
-    const core = `${host}${path}${qs ? "?" + qs : ""}`;
-    return core.toLowerCase();
+    // ❌ Remove: const qs = url.searchParams.toString();
+    // ✅ Ignore query strings entirely for deduplication
+    return `${host}${path}`.toLowerCase();
   } catch {
     return (u || "").trim().toLowerCase();
   }

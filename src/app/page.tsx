@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Investment } from "@/lib/types";
 import {
   BarChart,
@@ -10,7 +10,6 @@ import {
   Tooltip,
   CartesianGrid,
   ResponsiveContainer,
-  Legend,
   LineChart,
   Line,
 } from "recharts";
@@ -49,6 +48,8 @@ export default function Page() {
     setLoading(true);
     setError(null);
     setPage(1); // reset pagination
+    console.log('selectedStates ',selectedStates);
+    
     try {
       const url = `/api/investments?states=${encodeURIComponent(selectedStates.join(","))}&window=${encodeURIComponent(windowStr)}`;
       const res = await fetch(url);
@@ -64,9 +65,6 @@ export default function Page() {
       setLoading(false);
     }
   }
-
-  // ❌ Removed auto-fetch on load
-  // useEffect(() => { fetchNow(); }, []);
 
   function onSort(col: SortKey) {
     if (sortKey === col) setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -149,8 +147,13 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white text-[15px] leading-relaxed">
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-1">India Investment Dashboard</h1>
-        <p className="text-slate-600 mb-6">Select states and click <strong>Fetch Now</strong> to view the latest AI-extracted investment insights.</p>
+        {/* Header: make it more visible */}
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-1 text-slate-900">
+          India Investment Dashboard
+        </h1>
+        <p className="text-slate-600 mb-6">
+          Select states and click <strong>Fetch Now</strong> to view the latest AI-extracted investment insights.
+        </p>
 
         {/* Controls */}
         <div className="flex flex-wrap gap-4 mb-6 items-end">
@@ -185,7 +188,7 @@ export default function Page() {
           <button
             onClick={fetchNow}
             disabled={loading}
-            className="inline-flex items-center justify-center rounded-lg bg-black text-white px-5 py-2 text-sm font-medium shadow hover:bg-slate-800 disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-lg bg-black text-white px-5 py-2 text-sm font-semibold shadow hover:bg-slate-800 disabled:opacity-50"
           >
             {loading ? "Fetching…" : "Fetch Now"}
           </button>
@@ -238,8 +241,8 @@ export default function Page() {
           <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50">
               <h2 className="font-semibold text-[15px]">Results ({data.length} records)</h2>
-              <div className="text-sm text-slate-600">
-                Total Amount: ₹ {totalAmount.toLocaleString("en-IN")}
+              <div className="text-sm text-slate-700">
+                Total Amount: <span className="font-semibold">₹ {totalAmount.toLocaleString("en-IN")}</span>
               </div>
             </div>
 
@@ -267,17 +270,17 @@ export default function Page() {
                       key={r.source_url + i}
                       className={i % 2 === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50 hover:bg-slate-100"}
                     >
-                      <td className="px-3 py-3">{r.announcement_date || "-"}</td>
+                      <td className="px-3 py-3 font-medium">{r.announcement_date || "-"}</td>
                       <td className="px-3 py-3">{r.state || "-"}</td>
-                      <td className="px-3 py-3">{r.company || "-"}</td>
+                      <td className="px-3 py-3 font-medium">{r.company || "-"}</td>
                       <td className="px-3 py-3">{r.project_type || r.status || "-"}</td>
                       <td className="px-3 py-3">{r.sector || "-"}</td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 font-medium">
                         {r.amount_in_inr_crore ? r.amount_in_inr_crore.toLocaleString("en-IN") : "-"}
                       </td>
                       <td className="px-3 py-3">{r.jobs ?? "-"}</td>
                       <td className="px-3 py-3">
-                        <a href={r.source_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                        <a href={r.source_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
                           {r.source_name || "link"}
                         </a>
                       </td>
@@ -295,53 +298,68 @@ export default function Page() {
               </div>
 
               {/* Controls */}
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <button
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page <= 1}
-                        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold
-                                  bg-black text-white hover:bg-slate-800 transition
-                                  disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Previous page"
-                        title="Previous"
-                      >
-                        <span aria-hidden>‹</span> Prev
-                      </button>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold
+                            bg-black text-white hover:bg-slate-800 transition
+                            disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Previous page"
+                  title="Previous"
+                >
+                  <span aria-hidden>‹</span> Prev
+                </button>
 
-                      <button
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page >= totalPages}
-                        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold
-                                  bg-black text-white hover:bg-slate-800 transition
-                                  disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Next page"
-                        title="Next"
-                      >
-                        Next <span aria-hidden>›</span>
-                      </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold
+                            bg-black text-white hover:bg-slate-800 transition
+                            disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Next page"
+                  title="Next"
+                >
+                  Next <span aria-hidden>›</span>
+                </button>
 
-                      <div className="hidden sm:block h-6 w-px bg-slate-300 mx-1" />
+                <div className="hidden sm:block h-6 w-px bg-slate-300 mx-1" />
 
-                      <label className="text-sm text-slate-700 inline-flex items-center gap-2">
-                        Rows per page
-                        <select
-                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-                          value={pageSize}
-                          onChange={(e) => {
-                            setPageSize(parseInt(e.target.value, 10));
-                            setPage(1);
-                          }}
-                        >
-                          {[10, 20, 50].map((n) => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-
+                <label className="text-sm text-slate-700 inline-flex items-center gap-2">
+                  Rows per page
+                  <select
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(parseInt(e.target.value, 10));
+                      setPage(1);
+                    }}
+                  >
+                    {[10, 20, 50].map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
           </section>
         )}
+
+        {/* Footer with contact */}
+        <footer className="mt-10 border-t border-slate-200">
+          <div className="py-6 text-sm text-slate-600 flex flex-col md:flex-row items-center justify-between">
+            <div>© {new Date().getFullYear()} <span className="font-semibold">India Investment Dashboard</span></div>
+            <div>
+              Contact:{" "}
+              <a
+                className="font-semibold text-indigo-700 hover:text-indigo-900 underline"
+                href="mailto:budgetbloomeducation@gmail.com"
+              >
+                budgetbloomeducation@gmail.com
+              </a>
+            </div>
+          </div>
+        </footer>
       </div>
     </main>
   );
