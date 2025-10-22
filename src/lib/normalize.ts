@@ -1,4 +1,4 @@
-import type { Investment } from "@/app/api/investments/route";
+import type { Investment } from "@/lib/types";
 
 export function normalizeRecords(arr: any[]): Investment[] {
   return arr.map((x:any) => {

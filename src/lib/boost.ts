@@ -1,4 +1,5 @@
-import type { Investment } from "@/app/api/investments/route";
+//import type { Investment } from "@/app/api/investments/route";
+import type { Investment } from "@/lib/types";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY as string;
 
 async function boostOne(title: string, url: string, text: string, base: Investment): Promise<Partial<Investment>> {

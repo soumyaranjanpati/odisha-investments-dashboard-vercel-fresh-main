@@ -1,6 +1,8 @@
 // src/lib/extract.ts
 // OpenAI extraction helpers (prompt, call, JSON parsing, preview)
 
+import { dedupeSemantic, dedupeByKey } from "./dedupe";
+
 type InItem = {
   title: string;
   text: string;
@@ -259,9 +261,21 @@ export async function extractStructured(items: InItem[]): Promise<ExtractedRow[]
         return record;
       });
 
-      return verified;
+      // Use semantic dedupe when key is present, fallback to deterministic dedupeByKey
+      if (OPENAI_API_KEY) {
+        try {
+          const sem = await dedupeSemantic(verified, { openAiKey: OPENAI_API_KEY, threshold: 0.92 });
+          return sem as ExtractedRow[];
+        } catch (e) {
+          console.warn("[DEDUPE] semantic dedupe failed, falling back to key dedupe", e);
+          return dedupeByKey(verified) as ExtractedRow[];
+        }
+      } else {
+        return dedupeByKey(verified) as ExtractedRow[];
+      }
     }
-  } catch {
+  } catch (err) {
+    console.warn("[EXTRACT] JSON parse failed", err);
     // ignore parse errors and fall back to []
   }
   return [];
